@@ -96,8 +96,11 @@ public class WaterflowManager : MonoBehaviour
                 // The sensor is scanning the depth.
                 // The nearest value is 0 and the farthest is 4500f
                 int height = MAX_DEPTH - depthData[fullIndex];
-                float heightValue = (float)(height / 4500f);  // Max is 4500
-                terrainHeight[x, y] = heightValue * HEIGHT_MAP_MULTIPLYER; // Set the height to the TerrainHeightArray
+
+                float heightValue = (float)(height / 4500f) * HEIGHT_MAP_MULTIPLYER;  // Max is 4500
+
+                terrainHeight[x, y] = (terrainHeight[x, y] + heightValue) / 2; // Median over the last frame in order to avoid noise
+                //terrainHeight[x, y] = heightValue;
                 heightMapOrderedList.Add(new Tuple<int, int, float>(x, y, heightValue));
             }
         }
