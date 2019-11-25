@@ -13,10 +13,10 @@ public class WaterflowManager : MonoBehaviour
     private DepthFrameReader _Reader;
     private ushort[] _Data;
     private const int MAX_DEPTH = 4500; // The maximum value the Kinect may return for distances
-    private const float WATER_HEIGHT_EPSILON = 0.01f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
-    private const float FRESH_WATER_INFLOW = 1f; // The amount of water added each tick
+    private const float WATER_HEIGHT_EPSILON = 0.001f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
+    private const float FRESH_WATER_INFLOW = 0.8f; // The amount of water added each tick
 
-    private Texture2D texture;
+    private Texture2D waterTexture; // Texture that masks where we "stamp" water
     private int depthWidth = 512;
     private int depthHeight = 424;
 
@@ -29,7 +29,7 @@ public class WaterflowManager : MonoBehaviour
     float[,] waterHeight;
     float[,] terrainHeight;
 
-    int updateCounter = 0;
+    // int updateCounter = 0;
 
     void Start() {
         waterHeight = new float[depthWidth, depthHeight];
@@ -39,8 +39,9 @@ public class WaterflowManager : MonoBehaviour
         waterSourceY = 130;//depthHeight / 2;
 
         _Sensor = KinectSensor.GetDefault();
-        texture = new Texture2D(depthWidth, depthHeight);
-        gameObject.GetComponent<Renderer>().material.mainTexture = texture;
+        waterTexture = new Texture2D(depthWidth, depthHeight);
+        gameObject.GetComponent<Renderer>().material.SetTexture("_WaterMaskTex", waterTexture);
+        
         frameDesc = _Sensor.DepthFrameSource.FrameDescription;
 
         if (_Sensor != null) {
@@ -125,30 +126,40 @@ public class WaterflowManager : MonoBehaviour
 
                 List<Tuple<int, int, float>> capacityList = generateWaterFlowCapacityList(x, y);
 
-                // As long as we have flow capacities: distribute water!
-                while (capacityList.Count > 0) {
-                    // The first element is the one with the least capacity.
-                    // We try to fill this one first (and all sourrounding ones equally)
-                    float distributedCapacity = capacityList[0].Item3;
+                // The first element is the one with the least capacity.
+                // We try to fill this one first (and all sourrounding ones equally)
+                //float distributedCapacity = capacityList[0].Item3;
 
-                    // The minimum amount of water that is desired will be divided by all fields with capacity
-                    // That way we spread the water evenly among all neighbours
-                    //TODO CHECK IF WE HAVE TO ADD +1 FOR THE LOCAL FIELD
-                    float distributedWaterAmount = distributedCapacity / capacityList.Count;
-                        
-                    // Now distribute the flow 
-                    // Iterate over all neighbours and give them their amount of water.
-                    for (int neighbourIndex = 0; neighbourIndex < capacityList.Count; neighbourIndex++) {
-                        Tuple<int, int, float> neighbourCapacity = capacityList[neighbourIndex];
-                        // The neighbour field gets the amount of water added
-                        waterHeight[neighbourCapacity.Item1, neighbourCapacity.Item2] += distributedWaterAmount;
-                        // The local field gets the amount of water removed
-                        waterHeight[x,y] -= distributedWaterAmount;
-                    }
+                float availableWater = waterHeight[x, y];
 
-                    // Update the list now and see if there are still fields that could receive water
-                    capacityList = generateWaterFlowCapacityList(x, y);
+                // Calculate how much water would have to be distributed
+                // This is the amount of capacity in total. 
+                // Most likely this is far more than available water
+                // But that way we get an estimation where we require the most
+                // to be flown to.
+                float totalRequestedFlow = 0f;
+                for (int neighbourIndex = 0; neighbourIndex < capacityList.Count; neighbourIndex++) {
+                    totalRequestedFlow += capacityList[neighbourIndex].Item3;
                 }
+                // Now we know how much water "would like" to flow. Divide the potential water by this value.
+                // E.g. we have a total requested flow of 4 but only 1f water in the local field
+                // This would lead to a totalCapacityRatio of 1 / 4 = 0.25 
+                // In the next step all desired water would flow multiplied by * 0.25 
+                float totalCapacityRatio = Math.Min(1f, availableWater / totalRequestedFlow);
+
+                // The minimum amount of water that is desired will be divided by all fields with capacity
+                // That way we spread the water evenly among all neighbours
+                //TODO CHECK IF WE HAVE TO ADD +1 FOR THE LOCAL FIELD
+                //float distributedWaterAmount = distributedCapacity / capacityList.Count;
+                        
+                // Now distribute the flow 
+                // Iterate over all neighbours and give them their amount of water.
+                for (int neighbourIndex = 0; neighbourIndex < capacityList.Count; neighbourIndex++) {
+                    Tuple<int, int, float> neighbourCapacity = capacityList[neighbourIndex];
+                    waterHeight[neighbourCapacity.Item1, neighbourCapacity.Item2] += neighbourCapacity.Item3 * totalCapacityRatio;
+                    waterHeight[x,y] -= neighbourCapacity.Item3 * totalCapacityRatio;
+                }
+
             }
         }
     }
@@ -253,7 +264,8 @@ public class WaterflowManager : MonoBehaviour
                 //waterFlowDifference = Dh + halfLeftOverWaterAmount;
 
                 // Simplified solution. difference is ALL WATER POSSIBLE
-                waterFlowDifference = Math.Min(localWaterHeight, localAbsoluteHeight - otherAbsoluteHeight);
+                // waterFlowDifference = Math.Min(localWaterHeight, localAbsoluteHeight - otherAbsoluteHeight);
+                waterFlowDifference = localAbsoluteHeight - otherAbsoluteHeight;
             }
         }
         return new Tuple<int, int, float>(destX, destY, waterFlowDifference);
@@ -265,27 +277,31 @@ public class WaterflowManager : MonoBehaviour
         Color pixelColor = new Color(0f, 0f, 0f);
         for (int y = 0; y < frameDesc.Height; y++) {
             for (int x = 0; x < frameDesc.Width; x++) {
+
                 float waterHeightVal = waterHeight[x, y];
                 //Color color = new Color(waterHeightVal, waterHeightVal, waterHeightVal);
                 //texture.SetPixel(x, y, color);
                 if (waterHeightVal > 0) {
-                    pixelColor = new Color(0.2f, 0.3f, 1f, waterHeightVal);
-                    texture.SetPixel(x, y, pixelColor);
+                    pixelColor = new Color(0f, 0f, 0f, 1f);
+                   
                 } else {
+                    pixelColor = new Color(0f, 0f, 0f, 0f);
                     // All other textures get a color mapping 
-                    float terrainHeightVal = terrainHeight[x, y];
-                    if (terrainHeightVal < 0.5) {
-                        pixelColor = new Color(1f, 1f, 0.6f); // Beach
-                    } else if (terrainHeightVal < 0.8) {
-                        pixelColor = new Color(0.5f, 1f, 0.5f); // Grass
-                    } else if (terrainHeightVal < 0.9) {
-                        pixelColor = new Color(0.7f, 0.7f, 0.7f); // Mountain
-                    } else {
-                        pixelColor = new Color(0.7f, 0.7f, 0.7f); // Mountain
-                    }
+                    /* float terrainHeightVal = terrainHeight[x, y];
+                     if (terrainHeightVal < 0.5) {
+                         pixelColor = new Color(1f * terrainHeightVal, 1f * terrainHeightVal, 0.6f * terrainHeightVal); // Beach
+                     } else if (terrainHeightVal < 0.8) {
+                         pixelColor = new Color(0.5f * terrainHeightVal, 1f * terrainHeightVal, 0.5f * terrainHeightVal); // Grass
+                     } else if (terrainHeightVal < 0.9) {
+                         pixelColor = new Color(0.9f * terrainHeightVal, 0.75f * terrainHeightVal, 0.7f * terrainHeightVal); // Mountain
+                     } else {
+                         pixelColor = new Color(1f * terrainHeightVal, 1f * terrainHeightVal, 1f * terrainHeightVal); // Snow
+                     }
 
-                texture.SetPixel(x, y, pixelColor);
+                     waterTexture.SetPixel(x, y, pixelColor); */
                 }
+
+                waterTexture.SetPixel(x, y, pixelColor);
 
                 //  if (waterHeightVal > 0) {
                 //      Debug.Log("Water ( " + waterHeightVal + " ) in pixel: " + x + " ; " + y);
@@ -295,13 +311,13 @@ public class WaterflowManager : MonoBehaviour
 
         // Paint the Source of Water ("+")
         pixelColor = new Color(1f, 0f, 0f);
-        texture.SetPixel(waterSourceX, waterSourceY, pixelColor);
-        texture.SetPixel(waterSourceX+1, waterSourceY, pixelColor);
-        texture.SetPixel(waterSourceX-1, waterSourceY, pixelColor);
-        texture.SetPixel(waterSourceX, waterSourceY+1, pixelColor);
-        texture.SetPixel(waterSourceX, waterSourceY-1, pixelColor);
+        waterTexture.SetPixel(waterSourceX, waterSourceY, pixelColor);
+        waterTexture.SetPixel(waterSourceX+1, waterSourceY, pixelColor);
+        waterTexture.SetPixel(waterSourceX-1, waterSourceY, pixelColor);
+        waterTexture.SetPixel(waterSourceX, waterSourceY+1, pixelColor);
+        waterTexture.SetPixel(waterSourceX, waterSourceY-1, pixelColor);
         // Apply the texture
-        texture.Apply();
+        waterTexture.Apply();
     }
 
     void OnApplicationQuit() {
