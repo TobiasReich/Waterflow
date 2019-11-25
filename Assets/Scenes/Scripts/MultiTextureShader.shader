@@ -1,10 +1,11 @@
-﻿Shader "Custom/2TextureShader"
+﻿Shader "Custom/MultiTextureShader"
 {
     Properties
     {
         _Color ("Color", Color) = (1,1,1,1)
         _MainTex ("Albedo (RGB)", 2D) = "white" {}
         _WaterTex ("Water (RGB)", 2D) = "white" {}
+        _HeightTex ("HeightShading (RGB)", 2D) = "white" {}
         _WaterMaskTex ("Water-MASK (RGB)", 2D) = "white" {}
         _Glossiness ("Smoothness", Range(0,1)) = 0.5
         _Metallic ("Metallic", Range(0,1)) = 0.0
@@ -24,12 +25,14 @@
         sampler2D _MainTex;
         sampler2D _WaterTex;
         sampler2D _WaterMaskTex;
+        sampler2D _HeightTex;
 
         struct Input
         {
             float2 uv_MainTex;
 			float2 uv_WaterTex;
 			float2 uv_WaterMaskTex;
+			float2 uv_HeightTex;
         };
 
         half _Glossiness;
@@ -49,8 +52,9 @@
             fixed4 MainColor = tex2D (_MainTex, IN.uv_MainTex) * _Color;
             fixed4 WaterColor = tex2D (_WaterTex, IN.uv_WaterTex);
             fixed4 WaterMaskColor = tex2D (_WaterMaskTex, IN.uv_WaterMaskTex);
+            fixed4 HeightTexColor = tex2D (_HeightTex, IN.uv_HeightTex);
 
-            o.Albedo = (MainColor.rgb * (1 - WaterMaskColor.a)) + (WaterColor.rgb * WaterMaskColor.a);
+            o.Albedo = (MainColor.rgb * HeightTexColor.rgb * (1 - WaterMaskColor.a)) + (WaterColor.rgb * WaterMaskColor.a);
             // Metallic and smoothness come from slider variables
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness;

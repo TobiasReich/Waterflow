@@ -14,9 +14,12 @@ public class WaterflowManager : MonoBehaviour
     private ushort[] _Data;
     private const int MAX_DEPTH = 4500; // The maximum value the Kinect may return for distances
     private const float WATER_HEIGHT_EPSILON = 0.001f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
-    private const float FRESH_WATER_INFLOW = 0.8f; // The amount of water added each tick
+    private const float FRESH_WATER_INFLOW = 2f; // The amount of water added each tick
 
+    private Color waterEnabledTexture;
+    private Color waterDisabledTexture;
     private Texture2D waterTexture; // Texture that masks where we "stamp" water
+    private Texture2D heightTexture; // Texture that paints the height
     private int depthWidth = 512;
     private int depthHeight = 424;
 
@@ -32,15 +35,20 @@ public class WaterflowManager : MonoBehaviour
     // int updateCounter = 0;
 
     void Start() {
+        waterEnabledTexture= new Color(0f, 0f, 0f, 1f);
+        waterDisabledTexture= new Color(0f, 0f, 0f, 0f);
+
         waterHeight = new float[depthWidth, depthHeight];
         terrainHeight = new float[depthWidth, depthHeight];
 
-        waterSourceX = 70;//depthWidth / 2;
-        waterSourceY = 130;//depthHeight / 2;
+        waterSourceX = 300;
+        waterSourceY = 130;
 
         _Sensor = KinectSensor.GetDefault();
         waterTexture = new Texture2D(depthWidth, depthHeight);
+        heightTexture = new Texture2D(depthWidth, depthHeight);
         gameObject.GetComponent<Renderer>().material.SetTexture("_WaterMaskTex", waterTexture);
+        gameObject.GetComponent<Renderer>().material.SetTexture("_HeightTex", heightTexture);
         
         frameDesc = _Sensor.DepthFrameSource.FrameDescription;
 
@@ -92,7 +100,7 @@ public class WaterflowManager : MonoBehaviour
         }
         // Sort the heightmap in place, descending (that's why ObjectB and ObjectA switched)
         // The first element is now the highest in the world
-        heightMapOrderedList.Sort((objectA, objectB) => objectB.Item3.CompareTo(objectA.Item3));
+        heightMapOrderedList.Sort((objectA, objectB) => objectA.Item3.CompareTo(objectB.Item3));
     }
 
     /** Distributes the water depending on the height around it.
@@ -274,50 +282,25 @@ public class WaterflowManager : MonoBehaviour
 
     /* This generates a water texture linked to the amount of water in each "(height) pixel" */
     private void GenerateWaterTexture() {
-        Color pixelColor = new Color(0f, 0f, 0f);
         for (int y = 0; y < frameDesc.Height; y++) {
             for (int x = 0; x < frameDesc.Width; x++) {
 
                 float waterHeightVal = waterHeight[x, y];
-                //Color color = new Color(waterHeightVal, waterHeightVal, waterHeightVal);
-                //texture.SetPixel(x, y, color);
+                float terrainHeightValue = terrainHeight[x, y];
+
+                Color color = new Color(terrainHeightValue, terrainHeightValue, terrainHeightValue);
+                heightTexture.SetPixel(x, y, color);
+
                 if (waterHeightVal > 0) {
-                    pixelColor = new Color(0f, 0f, 0f, 1f);
-                   
+                    waterTexture.SetPixel(x, y, waterEnabledTexture); // Sets the water texture enabled this pixel
                 } else {
-                    pixelColor = new Color(0f, 0f, 0f, 0f);
-                    // All other textures get a color mapping 
-                    /* float terrainHeightVal = terrainHeight[x, y];
-                     if (terrainHeightVal < 0.5) {
-                         pixelColor = new Color(1f * terrainHeightVal, 1f * terrainHeightVal, 0.6f * terrainHeightVal); // Beach
-                     } else if (terrainHeightVal < 0.8) {
-                         pixelColor = new Color(0.5f * terrainHeightVal, 1f * terrainHeightVal, 0.5f * terrainHeightVal); // Grass
-                     } else if (terrainHeightVal < 0.9) {
-                         pixelColor = new Color(0.9f * terrainHeightVal, 0.75f * terrainHeightVal, 0.7f * terrainHeightVal); // Mountain
-                     } else {
-                         pixelColor = new Color(1f * terrainHeightVal, 1f * terrainHeightVal, 1f * terrainHeightVal); // Snow
-                     }
-
-                     waterTexture.SetPixel(x, y, pixelColor); */
+                    waterTexture.SetPixel(x, y, waterDisabledTexture); // Disables water texture this pixel
                 }
-
-                waterTexture.SetPixel(x, y, pixelColor);
-
-                //  if (waterHeightVal > 0) {
-                //      Debug.Log("Water ( " + waterHeightVal + " ) in pixel: " + x + " ; " + y);
-                //  }
             }
         }
 
-        // Paint the Source of Water ("+")
-        pixelColor = new Color(1f, 0f, 0f);
-        waterTexture.SetPixel(waterSourceX, waterSourceY, pixelColor);
-        waterTexture.SetPixel(waterSourceX+1, waterSourceY, pixelColor);
-        waterTexture.SetPixel(waterSourceX-1, waterSourceY, pixelColor);
-        waterTexture.SetPixel(waterSourceX, waterSourceY+1, pixelColor);
-        waterTexture.SetPixel(waterSourceX, waterSourceY-1, pixelColor);
-        // Apply the texture
         waterTexture.Apply();
+        heightTexture.Apply();
     }
 
     void OnApplicationQuit() {
