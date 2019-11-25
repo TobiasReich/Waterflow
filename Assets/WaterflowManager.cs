@@ -14,8 +14,8 @@ public class WaterflowManager : MonoBehaviour
     private ushort[] _Data;
     private const int MAX_DEPTH = 4500; // The maximum value the Kinect may return for distances
     private const float WATER_HEIGHT_EPSILON = 0.001f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
-    private const float FRESH_WATER_INFLOW = 100f; // The amount of water added each tick
-    private const float HEIGHT_MAP_MULTIPLYER = 10000f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
+    private const float FRESH_WATER_INFLOW = 150f; // The amount of water added each tick
+    private const float HEIGHT_MAP_MULTIPLYER = 20000f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
 
     private Color waterEnabledTexture;
     private Color waterDisabledTexture;
@@ -23,6 +23,10 @@ public class WaterflowManager : MonoBehaviour
     private Texture2D heightTexture; // Texture that paints the height
     private int depthWidth = 512;
     private int depthHeight = 424;
+    
+    // Values for water texture offset (so it looks more like flowing water)
+    float scrollSpeed = 0.003f;
+    Renderer rend;
 
     /* Defines where the water comes from */
     private int waterSourceX;
@@ -33,17 +37,18 @@ public class WaterflowManager : MonoBehaviour
     float[,] waterHeight;
     float[,] terrainHeight;
 
-    // int updateCounter = 0;
-
+   
     void Start() {
-        waterEnabledTexture= new Color(0f, 0f, 0f, 1f);
+        rend = GetComponent<Renderer>();
+
+        waterEnabledTexture = new Color(0f, 0f, 0f, 1f);
         waterDisabledTexture= new Color(0f, 0f, 0f, 0f);
 
         waterHeight = new float[depthWidth, depthHeight];
         terrainHeight = new float[depthWidth, depthHeight];
 
-        waterSourceX = 350;
-        waterSourceY = 230;
+        waterSourceX = 150;
+        waterSourceY = 350;
 
         _Sensor = KinectSensor.GetDefault();
         waterTexture = new Texture2D(depthWidth, depthHeight);
@@ -69,12 +74,9 @@ public class WaterflowManager : MonoBehaviour
             }
         }
 
-        //updateCounter++;
-        //if (updateCounter % 10 == 0) {
-            UpdateHeightMap();
-            AddWater();
-            DistributeWater();
-        //}
+        UpdateHeightMap();
+        AddWater();
+        DistributeWater();
         GenerateWaterTexture();
     }
 
@@ -282,6 +284,9 @@ public class WaterflowManager : MonoBehaviour
 
     /* This generates a water texture linked to the amount of water in each "(height) pixel" */
     private void GenerateWaterTexture() {
+        float offset = Time.time * scrollSpeed;
+        rend.material.SetTextureOffset("_WaterTex", new Vector2(offset, 0));
+
         for (int y = 0; y < frameDesc.Height; y++) {
             for (int x = 0; x < frameDesc.Width; x++) {
 
