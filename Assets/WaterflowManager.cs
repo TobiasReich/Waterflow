@@ -85,29 +85,6 @@ public class WaterflowManager : MonoBehaviour
         GenerateWaterTexture();
     }
 
-    /** Adds water to the system */
-    private void AddWater() {
-        waterHeight[waterSourceX, waterSourceY] = FRESH_WATER_INFLOW;
-    }
-
-    /// <summary>
-    /// Removes a tiny bit of water from every field.
-    /// This removes dead fields after a while 
-    /// (e.g. those that are sourrounded by higher 
-    /// fields will never loose it's water)
-    /// That way now all water trickles away over time
-    /// and only those areas that permanently receive at 
-    /// least a minimum amount of water remain wet.
-    /// </summary>
-    private void TrickleOffWater() {
-        for (int y = 0; y < frameDesc.Height; y++) {
-            for (int x = 0; x < frameDesc.Width; x++) {
-                // The water height is the maximum of "empty" and the current height - epsilon
-                waterHeight[x, y] = Math.Max(0f, waterHeight[x, y] - WATER_HEIGHT_EPSILON);
-            }
-        }
-    }
-
 
     /* Iterate over all Fields and update its terrain height */
     private void UpdateHeightMap() {
@@ -128,6 +105,14 @@ public class WaterflowManager : MonoBehaviour
         // The first element is now the highest in the world
         heightMapOrderedList.Sort((objectA, objectB) => objectA.Item3.CompareTo(objectB.Item3));
     }
+
+
+    /** Adds water to the system */
+    private void AddWater() {
+        waterHeight[waterSourceX, waterSourceY] = FRESH_WATER_INFLOW;
+    }
+
+     
 
     /** Distributes the water depending on the height around it.
     *  
@@ -300,6 +285,26 @@ public class WaterflowManager : MonoBehaviour
         }
         return new Tuple<int, int, float>(destX, destY, waterFlowDifference);
     }
+
+
+    /// <summary>
+    /// Removes a tiny bit of water from every field.
+    /// This removes dead fields after a while 
+    /// (e.g. those that are sourrounded by higher 
+    /// fields will never loose it's water)
+    /// That way now all water trickles away over time
+    /// and only those areas that permanently receive at 
+    /// least a minimum amount of water remain wet.
+    /// </summary>
+    private void TrickleOffWater() {
+        for (int y = 0; y < frameDesc.Height; y++) {
+            for (int x = 0; x < frameDesc.Width; x++) {
+                // The water height is the maximum of "empty" and the current height - epsilon
+                waterHeight[x, y] = Math.Max(0f, waterHeight[x, y] - WATER_HEIGHT_EPSILON);
+            }
+        }
+    }
+
 
 
     /* This generates a water texture linked to the amount of water in each "(height) pixel" */
