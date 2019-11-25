@@ -25,7 +25,7 @@ public class WaterflowManager : MonoBehaviour
     private int depthHeight = 424;
     
     // Values for water texture offset (so it looks more like flowing water)
-    float scrollSpeed = 0.003f;
+    float scrollSpeed = 0.002f;
     Renderer rend;
 
     /* Defines where the water comes from */
