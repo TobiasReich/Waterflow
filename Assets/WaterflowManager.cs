@@ -13,7 +13,7 @@ public class WaterflowManager : MonoBehaviour
     private DepthFrameReader _Reader;
     private ushort[] _Data;
     private const int MAX_DEPTH = 4500; // The maximum value the Kinect may return for distances
-    private const float WATER_HEIGHT_EPSILON = 0.001f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
+    private const float WATER_HEIGHT_EPSILON = 0.002f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
     private const float FRESH_WATER_INFLOW = 150f; // The amount of water added each tick
     private const float HEIGHT_MAP_MULTIPLYER = 20000f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
 
@@ -39,6 +39,10 @@ public class WaterflowManager : MonoBehaviour
 
    
     void Start() {
+        Application.targetFrameRate = 30; // Set the FPS to 30 - this is the max the Kinect can do.
+
+        Debug.Log("FrameRate: " + Application.targetFrameRate);
+
         rend = GetComponent<Renderer>();
 
         waterEnabledTexture = new Color(0f, 0f, 0f, 1f);
@@ -47,7 +51,7 @@ public class WaterflowManager : MonoBehaviour
         waterHeight = new float[depthWidth, depthHeight];
         terrainHeight = new float[depthWidth, depthHeight];
 
-        waterSourceX = 150;
+        waterSourceX = 170;
         waterSourceY = 350;
 
         _Sensor = KinectSensor.GetDefault();
@@ -77,12 +81,31 @@ public class WaterflowManager : MonoBehaviour
         UpdateHeightMap();
         AddWater();
         DistributeWater();
+        TrickleOffWater();
         GenerateWaterTexture();
     }
 
     /** Adds water to the system */
     private void AddWater() {
         waterHeight[waterSourceX, waterSourceY] = FRESH_WATER_INFLOW;
+    }
+
+    /// <summary>
+    /// Removes a tiny bit of water from every field.
+    /// This removes dead fields after a while 
+    /// (e.g. those that are sourrounded by higher 
+    /// fields will never loose it's water)
+    /// That way now all water trickles away over time
+    /// and only those areas that permanently receive at 
+    /// least a minimum amount of water remain wet.
+    /// </summary>
+    private void TrickleOffWater() {
+        for (int y = 0; y < frameDesc.Height; y++) {
+            for (int x = 0; x < frameDesc.Width; x++) {
+                // The water height is the maximum of "empty" and the current height - epsilon
+                waterHeight[x, y] = Math.Max(0f, waterHeight[x, y] - WATER_HEIGHT_EPSILON);
+            }
+        }
     }
 
 
@@ -119,9 +142,9 @@ public class WaterflowManager : MonoBehaviour
             Tuple<int, int, float> field = heightMapOrderedList[fieldIndex];
             int x = field.Item1;
             int y = field.Item2;
+
             
             if (waterHeight[x, y] <= WATER_HEIGHT_EPSILON) {
-                //waterHeight[x, y] = 0; // Remove if below epsilon
                 continue; // Nothing to distribute here.
 
             // At the end of the world -> vanish
@@ -133,13 +156,10 @@ public class WaterflowManager : MonoBehaviour
             } else {
                 // This is the normal case. The water distributes between the neighbour fields
                 // The water amount for this 
-
                 List<Tuple<int, int, float>> capacityList = generateWaterFlowCapacityList(x, y);
 
                 // The first element is the one with the least capacity.
                 // We try to fill this one first (and all sourrounding ones equally)
-                //float distributedCapacity = capacityList[0].Item3;
-
                 float availableWater = waterHeight[x, y];
 
                 // Calculate how much water would have to be distributed
@@ -291,10 +311,9 @@ public class WaterflowManager : MonoBehaviour
             for (int x = 0; x < frameDesc.Width; x++) {
 
                 float waterHeightVal = waterHeight[x, y];
-                float terrainHeightValue = terrainHeight[x, y] / HEIGHT_MAP_MULTIPLYER; // Reduce height to normalized value 0..1f
+                float height = terrainHeight[x, y] / HEIGHT_MAP_MULTIPLYER; // Reduce height to normalized value 0..1f
 
-                Color color = new Color(terrainHeightValue, terrainHeightValue, terrainHeightValue);
-                heightTexture.SetPixel(x, y, color);
+                heightTexture.SetPixel(x, y, new Color(height, height, height));
 
                 if (waterHeightVal > 0) {
                     waterTexture.SetPixel(x, y, waterEnabledTexture); // Sets the water texture enabled this pixel
