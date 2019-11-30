@@ -52,7 +52,7 @@ public class WaterflowManager : MonoBehaviour
         terrainHeight = new float[depthWidth, depthHeight];
 
         waterSourceX = 200;
-        waterSourceY = 150;
+        waterSourceY = 250;
 
         _Sensor = KinectSensor.GetDefault();
         waterTexture = new Texture2D(depthWidth, depthHeight);
@@ -316,15 +316,13 @@ public class WaterflowManager : MonoBehaviour
 
         for (int y = 0; y < frameDesc.Height; y++) {
             for (int x = 0; x < frameDesc.Width; x++) {
-
                 float waterHeightVal = waterHeight[x, y];
-                float height = terrainHeight[x, y] / HEIGHT_MAP_MULTIPLYER; // Reduce height to normalized value 0..1f
-
-                heightTexture.SetPixel(x, y, new Color(height, height, height));
-
                 if (waterHeightVal > 0) {
                     waterTexture.SetPixel(x, y, waterEnabledTexture); // Sets the water texture enabled this pixel
                 } else {
+                    // We draw the terrain -> Create the pixels here
+                    float height = terrainHeight[x, y] / HEIGHT_MAP_MULTIPLYER; // Reduce height to normalized value 0..1f
+                    heightTexture.SetPixel(x, y, new Color(height, height, height));
                     waterTexture.SetPixel(x, y, waterDisabledTexture); // Disables water texture this pixel
                 }
             }
