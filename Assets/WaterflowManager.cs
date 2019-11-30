@@ -12,7 +12,7 @@ public class WaterflowManager : MonoBehaviour
 
     private DepthFrameReader _Reader;
     private ushort[] _Data;
-    private const int MAX_DEPTH = 4500; // The maximum value the Kinect may return for distances
+    private const float MAX_DEPTH = 8000f; // The maximum value the Kinect may return for distances
     private const float WATER_HEIGHT_EPSILON = 0.002f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
     private const float FRESH_WATER_INFLOW = 150f; // The amount of water added each tick
     private const float HEIGHT_MAP_MULTIPLYER = 20000f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
@@ -51,8 +51,8 @@ public class WaterflowManager : MonoBehaviour
         waterHeight = new float[depthWidth, depthHeight];
         terrainHeight = new float[depthWidth, depthHeight];
 
-        waterSourceX = 170;
-        waterSourceY = 350;
+        waterSourceX = 200;
+        waterSourceY = 150;
 
         _Sensor = KinectSensor.GetDefault();
         waterTexture = new Texture2D(depthWidth, depthHeight);
@@ -94,10 +94,9 @@ public class WaterflowManager : MonoBehaviour
             for (int x = 0; x < frameDesc.Width; x++) {
                 int fullIndex = (y * frameDesc.Width) + x;
                 // The sensor is scanning the depth.
-                // The nearest value is 0 and the farthest is 4500f
-                int height = MAX_DEPTH - depthData[fullIndex];
-
-                float heightValue = (float)(height / 4500f) * HEIGHT_MAP_MULTIPLYER;  // Max is 4500
+                // The nearest value is 0 and the farthest is 8000f
+                float inverseHeightData = depthData[fullIndex] / MAX_DEPTH;
+                float heightValue = (1f - inverseHeightData) * HEIGHT_MAP_MULTIPLYER;
 
                 terrainHeight[x, y] = (terrainHeight[x, y] + heightValue) / 2; // Median over the last frame in order to avoid noise
                 //terrainHeight[x, y] = heightValue;
