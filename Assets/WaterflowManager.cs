@@ -13,11 +13,12 @@ public class WaterflowManager : MonoBehaviour
     private DepthFrameReader _Reader;
     private ushort[] _Data;
     private const float MAX_DEPTH = 8000f; // The maximum value the Kinect may return for distances
-    private const float WATER_HEIGHT_EPSILON = 0.002f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
-    private const float FRESH_WATER_INFLOW = 150f; // The amount of water added each tick
-    private const float HEIGHT_MAP_MULTIPLYER = 20000f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
+    private const float WATER_HEIGHT_EPSILON = 0.001f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
+    private const float FRESH_WATER_INFLOW = 350f; // The amount of water added each tick
+    private const float HEIGHT_MAP_MULTIPLYER = 50000f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
 
     private Color waterEnabledTexture;
+    private Color waterWetTexture;
     private Color waterDisabledTexture;
     private Texture2D waterTexture; // Texture that masks where we "stamp" water
     private Texture2D heightTexture; // Texture that paints the height
@@ -47,13 +48,14 @@ public class WaterflowManager : MonoBehaviour
         rend = GetComponent<Renderer>();
 
         waterEnabledTexture = new Color(0f, 0f, 0f, 1f);
+        waterWetTexture = new Color(0f, 0f, 0f, 0.7f);
         waterDisabledTexture= new Color(0f, 0f, 0f, 0f);
 
         waterHeight = new float[depthWidth, depthHeight];
         terrainHeight = new float[depthWidth, depthHeight];
 
-        waterSourceX = 200;
-        waterSourceY = 250;
+        waterSourceX = 350;
+        waterSourceY = 80;
 
         _Sensor = KinectSensor.GetDefault();
         
@@ -101,8 +103,8 @@ public class WaterflowManager : MonoBehaviour
                 float inverseHeightData = depthData[fullIndex] / MAX_DEPTH;
                 float heightValue = (1f - inverseHeightData) * HEIGHT_MAP_MULTIPLYER;
 
-                terrainHeight[x, y] = (terrainHeight[x, y] + heightValue) / 2; // Median over the last frame in order to avoid noise
-                //terrainHeight[x, y] = heightValue;
+                //terrainHeight[x, y] = (terrainHeight[x, y] + heightValue) / 2; // Median over the last frame in order to avoid noise
+                terrainHeight[x, y] = heightValue;
                 heightMapOrderedList.Add(new Tuple<int, int, float>(x, y, heightValue));
             }
         }
@@ -317,11 +319,19 @@ public class WaterflowManager : MonoBehaviour
         float offset = Time.time * scrollSpeed;
         rend.material.SetTextureOffset("_WaterTex", new Vector2(offset, 0));
 
-        for (int y = 0; y < frameDesc.Height; y++) {
-            for (int x = 0; x < frameDesc.Width; x++) {
+        for (int y = 1; y < frameDesc.Height-1; y++) {
+            for (int x = 1; x < frameDesc.Width-1; x++) {
                 float waterHeightVal = waterHeight[x, y];
                 if (waterHeightVal > 0) {
                     waterTexture.SetPixel(x, y, waterEnabledTexture); // Sets the water texture enabled this pixel
+
+                } else if (waterHeight[x + 1, y] + waterHeight[x - 1, y] + waterHeight[x, y + 1] + waterHeight[x, y - 1] > 0) {
+                    // If any of the sourrouncing fields contains water, paint this with a "wet" color (half color, half water)
+                    // This smoothes the texture so we don't see that many "dry pixels" in a continuum of water
+                    float height = terrainHeight[x, y] / HEIGHT_MAP_MULTIPLYER; // Reduce height to normalized value 0..1f
+                    heightTexture.SetPixel(x, y, new Color(height, height, height));
+                    waterTexture.SetPixel(x, y, waterWetTexture); // Disables water texture this pixel
+
                 } else {
                     // We draw the terrain -> Create the pixels here
                     float height = terrainHeight[x, y] / HEIGHT_MAP_MULTIPLYER; // Reduce height to normalized value 0..1f

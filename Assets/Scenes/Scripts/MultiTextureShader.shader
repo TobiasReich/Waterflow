@@ -5,7 +5,6 @@
         _WaterTex ("Water (RGB)", 2D) = "white" {}
         _HeightTex ("HeightShading (RGB)", 2D) = "white" {}
         _WaterMaskTex ("Water-MASK (RGB)", 2D) = "white" {}
-        _MountainTex ("MountainTexture (RGB)", 2D) = "white" {}
         _GrassTex ("GrassTexture (RGB)", 2D) = "white" {}
     }
     SubShader
@@ -24,7 +23,6 @@
         sampler2D _WaterTex;
         sampler2D _WaterMaskTex;
         sampler2D _HeightTex;
-        sampler2D _MountainTex;
         sampler2D _GrassTex;
 
         struct Input
@@ -32,7 +30,6 @@
 			float2 uv_WaterTex;
 			float2 uv_WaterMaskTex;
 			float2 uv_HeightTex;
-			float2 uv_MountainTex;
 			float2 uv_GrassTex;
         };
 		
@@ -49,14 +46,9 @@
             fixed4 WaterColor = tex2D (_WaterTex, IN.uv_WaterTex);
             fixed4 WaterMaskColor = tex2D (_WaterMaskTex, IN.uv_WaterMaskTex);
             fixed4 HeightTexColor = tex2D (_HeightTex, IN.uv_HeightTex);
-			fixed4 MountainTexColor = tex2D(_MountainTex, IN.uv_MountainTex);
 			fixed4 GrassTexColor = tex2D(_GrassTex, IN.uv_GrassTex);
-
-			if (WaterMaskColor.a == 1) {
-				o.Albedo = WaterColor.rgb;
-			} else {
-				o.Albedo = (GrassTexColor.rgb * HeightTexColor.rgb);
-			}
+			o.Albedo = (GrassTexColor.rgb * HeightTexColor.rgb * (1-WaterMaskColor.a)) + (WaterColor.rgb * WaterMaskColor.a);
+			//o.Albedo = (GrassTexColor.rgb * (1-WaterMaskColor.a)) + (WaterColor.rgb * WaterMaskColor.a);
         }
         ENDCG
     }
