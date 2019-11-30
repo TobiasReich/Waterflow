@@ -21,6 +21,7 @@ public class WaterflowManager : MonoBehaviour
     private Color waterDisabledTexture;
     private Texture2D waterTexture; // Texture that masks where we "stamp" water
     private Texture2D heightTexture; // Texture that paints the height
+
     private int depthWidth = 512;
     private int depthHeight = 424;
     
@@ -55,8 +56,10 @@ public class WaterflowManager : MonoBehaviour
         waterSourceY = 250;
 
         _Sensor = KinectSensor.GetDefault();
+        
         waterTexture = new Texture2D(depthWidth, depthHeight);
         heightTexture = new Texture2D(depthWidth, depthHeight);
+
         gameObject.GetComponent<Renderer>().material.SetTexture("_WaterMaskTex", waterTexture);
         gameObject.GetComponent<Renderer>().material.SetTexture("_HeightTex", heightTexture);
         
@@ -327,7 +330,6 @@ public class WaterflowManager : MonoBehaviour
                 }
             }
         }
-
         waterTexture.Apply();
         heightTexture.Apply();
     }
