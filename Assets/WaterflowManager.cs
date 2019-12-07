@@ -357,7 +357,7 @@ public class WaterflowManager : MonoBehaviour
                 }
             }
             UpdateHeightMap();
-            Thread.Sleep(1000);
+            Thread.Sleep(300);
         }
     }
 
@@ -375,20 +375,27 @@ public class WaterflowManager : MonoBehaviour
                 float inverseHeightData = depthData[fullIndex] / MAX_DEPTH;
                 float heightValue = (1f - inverseHeightData) * HEIGHT_MAP_MULTIPLYER;
 
-                //terrainHeight[x, y] = (terrainHeight[x, y] + heightValue) / 2; // Median over the last frame in order to avoid noise
-                tempTerrainHeight[x, y] = heightValue;
-                tempHeightMapOrderedList.Add(new Tuple<int, int, float>(x, y, heightValue));
+                tempTerrainHeight[x, y] = (terrainHeight[x, y] + heightValue) / 2; // Median over the last frame in order to avoid noise
+                //tempTerrainHeight[x, y] = heightValue;
             }
         }
 
         // TODO: Blur the height map array. This makes errors less dominant but also avoids pixel errors
+        for (int y = 0; y < frameDesc.Height; y++) {
+            for (int x = 0; x < frameDesc.Width; x++) {
+                
 
+                tempHeightMapOrderedList.Add(new Tuple<int, int, float>(x, y, tempTerrainHeight[x, y]));
+            }
+        }
 
         // Sort the heightmap in place, descending (that's why ObjectB and ObjectA switched)
         // The first element is now the highest in the world
         tempHeightMapOrderedList.Sort((objectA, objectB) => objectA.Item3.CompareTo(objectB.Item3));
 
-        // Assign the new height map data
+        // Assign the new height map data 
+        // The direct assign to a new array helps avoiding race conditions 
+        // a bit where the data gets updated while we process the water flow.
         heightMapOrderedList = tempHeightMapOrderedList;
         terrainHeight = tempTerrainHeight;
     }
