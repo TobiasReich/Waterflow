@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 using Windows.Kinect;
 
@@ -27,19 +30,24 @@ public class WaterflowManager : MonoBehaviour
     private int depthHeight = 424;
     
     // Values for water texture offset (so it looks more like flowing water)
-    float scrollSpeed = 0.002f;
+    float waterTextureFlowSpeed = 0.002f;
     Renderer rend;
 
     /* Defines where the water comes from */
-    private int waterSourceX;
-    private int waterSourceY;
+    private int waterSourceX = 150;
+    private int waterSourceY = 80;
 
     // A list containing all height values sorted so we can iterate from the heighest to the lowest field
     List<Tuple<int, int, float>> heightMapOrderedList = new List<Tuple<int, int, float>>();
     float[,] waterHeight;
     float[,] terrainHeight;
 
-   
+    //////////////////////////////////////////////////////// 
+    /// Background Job properties for updating the depth map 
+    //////////////////////////////////////////////////////// 
+    private Thread terrainUpdateThread;
+    private Boolean updatingTerrain = true; // Flag that keeps the terrain update thread alive
+
     void Start() {
         Application.targetFrameRate = 30; // Set the FPS to 30 - this is the max the Kinect can do.
 
@@ -54,9 +62,7 @@ public class WaterflowManager : MonoBehaviour
         waterHeight = new float[depthWidth, depthHeight];
         terrainHeight = new float[depthWidth, depthHeight];
 
-        waterSourceX = 350;
-        waterSourceY = 80;
-
+      
         _Sensor = KinectSensor.GetDefault();
         
         waterTexture = new Texture2D(depthWidth, depthHeight);
@@ -71,46 +77,17 @@ public class WaterflowManager : MonoBehaviour
             _Reader = _Sensor.DepthFrameSource.OpenReader();
             _Data = new ushort[_Sensor.DepthFrameSource.FrameDescription.LengthInPixels];
         }
+
+        terrainUpdateThread = new Thread(updateTerrain);
+        terrainUpdateThread.Start();
     }
 
-    void Update() {
-        if (_Reader != null) {
-            var frame = _Reader.AcquireLatestFrame();
-            if (frame != null) {
-                frame.CopyFrameDataToArray(_Data);
-                frame.Dispose();
-                frame = null;
-            }
-        }
 
-        UpdateHeightMap();
+    void Update() {
         AddWater();
         DistributeWater();
         TrickleOffWater();
         GenerateWaterTexture();
-    }
-
-
-    /* Iterate over all Fields and update its terrain height */
-    private void UpdateHeightMap() {
-        ushort[] depthData = _Data;
-        heightMapOrderedList.Clear();
-        for (int y = 0; y < frameDesc.Height; y++) {
-            for (int x = 0; x < frameDesc.Width; x++) {
-                int fullIndex = (y * frameDesc.Width) + x;
-                // The sensor is scanning the depth.
-                // The nearest value is 0 and the farthest is 8000f
-                float inverseHeightData = depthData[fullIndex] / MAX_DEPTH;
-                float heightValue = (1f - inverseHeightData) * HEIGHT_MAP_MULTIPLYER;
-
-                //terrainHeight[x, y] = (terrainHeight[x, y] + heightValue) / 2; // Median over the last frame in order to avoid noise
-                terrainHeight[x, y] = heightValue;
-                heightMapOrderedList.Add(new Tuple<int, int, float>(x, y, heightValue));
-            }
-        }
-        // Sort the heightmap in place, descending (that's why ObjectB and ObjectA switched)
-        // The first element is now the highest in the world
-        heightMapOrderedList.Sort((objectA, objectB) => objectA.Item3.CompareTo(objectB.Item3));
     }
 
 
@@ -316,7 +293,7 @@ public class WaterflowManager : MonoBehaviour
 
     /* This generates a water texture linked to the amount of water in each "(height) pixel" */
     private void GenerateWaterTexture() {
-        float offset = Time.time * scrollSpeed;
+        float offset = Time.time * waterTextureFlowSpeed;
         rend.material.SetTextureOffset("_WaterTex", new Vector2(offset, 0));
 
         for (int y = 1; y < frameDesc.Height-1; y++) {
@@ -358,4 +335,62 @@ public class WaterflowManager : MonoBehaviour
             _Sensor = null;
         }
     }
+
+
+    private void OnDestroy() {
+        updatingTerrain = false;
+    }
+    
+    /// 
+    /// TERRAIN UPDATE THREAD
+    /// 
+
+    void updateTerrain() {
+        while (updatingTerrain) {
+            // Debug.Log("Updating Terrain...");
+            if (_Reader != null) {
+                var frame = _Reader.AcquireLatestFrame();
+                if (frame != null) {
+                    frame.CopyFrameDataToArray(_Data);
+                    frame.Dispose();
+                    frame = null;
+                }
+            }
+            UpdateHeightMap();
+            Thread.Sleep(1000);
+        }
+    }
+
+    /* Iterate over all Fields and update its terrain height */
+    private void UpdateHeightMap() {
+        ushort[] depthData = _Data;
+        List<Tuple<int, int, float>> tempHeightMapOrderedList = new List<Tuple<int, int, float>>();
+        float[,] tempTerrainHeight = new float[depthWidth, depthHeight];
+
+        for (int y = 0; y < frameDesc.Height; y++) {
+            for (int x = 0; x < frameDesc.Width; x++) {
+                int fullIndex = (y * frameDesc.Width) + x;
+                // The sensor is scanning the depth.
+                // The nearest value is 0 and the farthest is 8000f
+                float inverseHeightData = depthData[fullIndex] / MAX_DEPTH;
+                float heightValue = (1f - inverseHeightData) * HEIGHT_MAP_MULTIPLYER;
+
+                //terrainHeight[x, y] = (terrainHeight[x, y] + heightValue) / 2; // Median over the last frame in order to avoid noise
+                tempTerrainHeight[x, y] = heightValue;
+                tempHeightMapOrderedList.Add(new Tuple<int, int, float>(x, y, heightValue));
+            }
+        }
+
+        // TODO: Blur the height map array. This makes errors less dominant but also avoids pixel errors
+
+
+        // Sort the heightmap in place, descending (that's why ObjectB and ObjectA switched)
+        // The first element is now the highest in the world
+        tempHeightMapOrderedList.Sort((objectA, objectB) => objectA.Item3.CompareTo(objectB.Item3));
+
+        // Assign the new height map data
+        heightMapOrderedList = tempHeightMapOrderedList;
+        terrainHeight = tempTerrainHeight;
+    }
+
 }
