@@ -34,8 +34,8 @@ public class WaterflowManager : MonoBehaviour
     Renderer rend;
 
     /* Defines where the water comes from */
-    private int waterSourceX = 150;
-    private int waterSourceY = 80;
+    private int waterSourceX = 130;
+    private int waterSourceY = 250;
 
     // A list containing all height values sorted so we can iterate from the heighest to the lowest field
     List<Tuple<int, int, float>> heightMapOrderedList = new List<Tuple<int, int, float>>();
@@ -366,6 +366,7 @@ public class WaterflowManager : MonoBehaviour
         ushort[] depthData = _Data;
         List<Tuple<int, int, float>> tempHeightMapOrderedList = new List<Tuple<int, int, float>>();
         float[,] tempTerrainHeight = new float[depthWidth, depthHeight];
+        float[,] smoothedTerrainHeight = new float[depthWidth, depthHeight];
 
         for (int y = 0; y < frameDesc.Height; y++) {
             for (int x = 0; x < frameDesc.Width; x++) {
@@ -380,12 +381,18 @@ public class WaterflowManager : MonoBehaviour
             }
         }
 
-        // TODO: Blur the height map array. This makes errors less dominant but also avoids pixel errors
-        for (int y = 0; y < frameDesc.Height; y++) {
-            for (int x = 0; x < frameDesc.Width; x++) {
-                
-
-                tempHeightMapOrderedList.Add(new Tuple<int, int, float>(x, y, tempTerrainHeight[x, y]));
+        // Blur the height map array. This makes errors less dominant but also avoids pixel errors
+        for (int y = 1; y < frameDesc.Height-1; y++) {
+            for (int x = 1; x < frameDesc.Width-1; x++) {
+                // Just take the 4 sourrounding fields and calculate the average value
+                smoothedTerrainHeight[x, y] =
+                    (tempTerrainHeight[x, y] +
+                    tempTerrainHeight[x+1, y] +
+                    tempTerrainHeight[x-1, y] +
+                    tempTerrainHeight[x, y+1] +
+                    tempTerrainHeight[x, y-1]) / 5.0f;
+                tempHeightMapOrderedList.Add(new Tuple<int, int, float>(x, y, smoothedTerrainHeight[x, y]));
+                //tempHeightMapOrderedList.Add(new Tuple<int, int, float>(x, y, tempTerrainHeight[x, y]));
             }
         }
 
@@ -393,11 +400,11 @@ public class WaterflowManager : MonoBehaviour
         // The first element is now the highest in the world
         tempHeightMapOrderedList.Sort((objectA, objectB) => objectA.Item3.CompareTo(objectB.Item3));
 
-        // Assign the new height map data 
+        // Assign the new (smoothed) height map data 
         // The direct assign to a new array helps avoiding race conditions 
         // a bit where the data gets updated while we process the water flow.
         heightMapOrderedList = tempHeightMapOrderedList;
-        terrainHeight = tempTerrainHeight;
+        terrainHeight = smoothedTerrainHeight;
     }
 
 }
