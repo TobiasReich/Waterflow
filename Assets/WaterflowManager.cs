@@ -18,7 +18,6 @@ public class WaterflowManager : MonoBehaviour
     private const float MAX_DEPTH = 8000f; // The maximum value the Kinect may return for distances
     private const float WATER_HEIGHT_EPSILON = 0.001f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
     private const float FRESH_WATER_INFLOW = 10000f; // The MAX amount of water added each tick
-    private float waterInflowScale = 0.5f; // The amount of water added each tick
     private const float HEIGHT_MAP_MULTIPLYER = 50000f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
 
     private Color waterEnabledTexture;
@@ -35,19 +34,18 @@ public class WaterflowManager : MonoBehaviour
     Renderer rend;
 
     /* Defines where the water comes from */
-    private int waterSourceX = 130;
-    private int waterSourceY = 250;
+    private int waterSourceX = 330;
+    private int waterSourceY = 100;
+    private float waterInflowScale = 0.5f; // The amount of water added each tick
+    private float minimumHeight = 0f; // Translates all height values by this amount
+    private float heightScaleFactor = 1f; // Scales all height values by this amount
+
 
     // A list containing all height values sorted so we can iterate from the heighest to the lowest field
     List<Tuple<int, int, float>> heightMapOrderedList = new List<Tuple<int, int, float>>();
     float[,] waterHeight;
     float[,] terrainHeight;
 
-    //////////////////////////////////////////////////////// 
-    /// Background Job properties for updating the depth map 
-    //////////////////////////////////////////////////////// 
-    private Thread terrainUpdateThread;
-    private Boolean updatingTerrain = true; // Flag that keeps the terrain update thread alive
 
     void Start() {
         Application.targetFrameRate = 30; // Set the FPS to 30 - this is the max the Kinect can do.
@@ -340,10 +338,53 @@ public class WaterflowManager : MonoBehaviour
     private void OnDestroy() {
         updatingTerrain = false;
     }
-    
+
+
+    //////////////////////////////////////////////////////// 
+    ///          Adjustments from outside (UI)
+    //////////////////////////////////////////////////////// 
+
+    public void adjustWaterFlow(float amount) {
+        Debug.Log("Adjusting flow to " + amount);
+        waterInflowScale = amount;
+    }
+
+    /// <summary>
+    /// Scale the terrain minimum value down
+    /// This can be used to define the ground level of the terrain
+    /// -> Use this in order to tell the sytem where the lowest scanned depth is
+    /// All values lower than this will be moved to this depth
+    /// This also normalizes the scanned data
+    /// </summary>
+    /// <param name="amount"></param>
+    public void setGroundHeight(float amount) {
+        Debug.Log("Adjusting minimum height to " + amount);
+        minimumHeight = amount;
+    }
+
+    /// <summary>
+    /// Unlike "setLowestHeight" this does not move the heightmap up or down but sets the scale factor
+    /// All heights higher than this will be set to the maximum height
+    /// This also normalizes the scanned data
+    /// </summary>
+    /// <param name="amount"></param>
+    public void setHeightScale(float amount) {
+        Debug.Log("Adjusting maximum height to " + amount);
+        heightScaleFactor = amount;            
+    }
+
+
+
+    //////////////////////////////////////////////////////// 
+    ///
+    /// Background Job properties for updating the depth map 
     /// 
-    /// TERRAIN UPDATE THREAD
+    /// -------------- TERRAIN UPDATE THREAD ---------------
     /// 
+    //////////////////////////////////////////////////////// 
+    private Thread terrainUpdateThread;
+    private Boolean updatingTerrain = true; // Flag that keeps the terrain update thread alive
+
 
     void updateTerrain() {
         while (updatingTerrain) {
@@ -374,9 +415,20 @@ public class WaterflowManager : MonoBehaviour
                 // The sensor is scanning the depth.
                 // The nearest value is 0 and the farthest is 8000f
                 float inverseHeightData = depthData[fullIndex] / MAX_DEPTH;
-                float heightValue = (1f - inverseHeightData) * HEIGHT_MAP_MULTIPLYER;
 
-                tempTerrainHeight[x, y] = (terrainHeight[x, y] + heightValue) / 2; // Median over the last frame in order to avoid noise
+                /// Translate the ground here by substracting "minimumHeight" from the measured height.
+                /// E.g having a height value of 0.3 and "minimumHeight" set to 0.1 the 
+                /// final height of this field will be 0.2
+                /// This gives the option to set the base height manually
+                float heightValue = (1f - inverseHeightData) - minimumHeight;
+
+                // After setting the ground height multiply the height with the scale factor so the heights can be scaled to 1
+                heightValue *= heightScaleFactor;
+
+                // Now multiply it with the height map multiplier
+                heightValue *= HEIGHT_MAP_MULTIPLYER;
+
+            tempTerrainHeight[x, y] = (terrainHeight[x, y] + heightValue) / 2; // Median over the last frame in order to avoid noise
                 //tempTerrainHeight[x, y] = heightValue;
             }
         }
@@ -407,14 +459,5 @@ public class WaterflowManager : MonoBehaviour
         terrainHeight = smoothedTerrainHeight;
     }
 
-
-
-    /// Adjustments from outside (UI)
-    /// 
-
-    public void adjustWaterFlow(float amount) {
-        Debug.Log("Adjusting flow to " + amount);
-        waterInflowScale = amount;
-    }
 
 }
