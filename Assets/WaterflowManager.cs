@@ -17,7 +17,8 @@ public class WaterflowManager : MonoBehaviour
     private ushort[] _Data;
     private const float MAX_DEPTH = 8000f; // The maximum value the Kinect may return for distances
     private const float WATER_HEIGHT_EPSILON = 0.001f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
-    private const float FRESH_WATER_INFLOW = 350f; // The amount of water added each tick
+    private const float FRESH_WATER_INFLOW = 10000f; // The MAX amount of water added each tick
+    private float waterInflowScale = 0.5f; // The amount of water added each tick
     private const float HEIGHT_MAP_MULTIPLYER = 50000f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
 
     private Color waterEnabledTexture;
@@ -62,7 +63,6 @@ public class WaterflowManager : MonoBehaviour
         waterHeight = new float[depthWidth, depthHeight];
         terrainHeight = new float[depthWidth, depthHeight];
 
-      
         _Sensor = KinectSensor.GetDefault();
         
         waterTexture = new Texture2D(depthWidth, depthHeight);
@@ -93,7 +93,7 @@ public class WaterflowManager : MonoBehaviour
 
     /** Adds water to the system */
     private void AddWater() {
-        waterHeight[waterSourceX, waterSourceY] = FRESH_WATER_INFLOW;
+        waterHeight[waterSourceX, waterSourceY] = waterInflowScale * FRESH_WATER_INFLOW;
     }
 
      
@@ -405,6 +405,16 @@ public class WaterflowManager : MonoBehaviour
         // a bit where the data gets updated while we process the water flow.
         heightMapOrderedList = tempHeightMapOrderedList;
         terrainHeight = smoothedTerrainHeight;
+    }
+
+
+
+    /// Adjustments from outside (UI)
+    /// 
+
+    public void adjustWaterFlow(float amount) {
+        Debug.Log("Adjusting flow to " + amount);
+        waterInflowScale = amount;
     }
 
 }
