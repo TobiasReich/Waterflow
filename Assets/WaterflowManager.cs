@@ -34,11 +34,11 @@ public class WaterflowManager : MonoBehaviour
     Renderer rend;
 
     /* Defines where the water comes from */
-    private int waterSourceX = 330;
-    private int waterSourceY = 100;
+    private int waterSourceX = 250;
+    private int waterSourceY = 200;
     private float waterInflowScale = 0.5f; // The amount of water added each tick
-    private float minimumHeight = 0f; // Translates all height values by this amount
-    private float heightScaleFactor = 1f; // Scales all height values by this amount
+    private float minimumHeight = 0.5f; // Translates all height values by this amount
+    private float heightScaleFactor = 2f; // Scales all height values by this amount
 
 
     // A list containing all height values sorted so we can iterate from the heighest to the lowest field
