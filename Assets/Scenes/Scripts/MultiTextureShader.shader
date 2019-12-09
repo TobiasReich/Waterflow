@@ -6,6 +6,7 @@
         _HeightTex ("HeightShading (RGB)", 2D) = "white" {}
         _WaterMaskTex ("Water-MASK (RGB)", 2D) = "white" {}
         _GrassTex ("GrassTexture (RGB)", 2D) = "white" {}
+		_SandTex("SandTexture (RGB)", 2D) = "white" {}
     }
     SubShader
     {
@@ -24,6 +25,7 @@
         sampler2D _WaterMaskTex;
         sampler2D _HeightTex;
         sampler2D _GrassTex;
+        sampler2D _SandTex;
 
         struct Input
         {
@@ -31,6 +33,7 @@
 			float2 uv_WaterMaskTex;
 			float2 uv_HeightTex;
 			float2 uv_GrassTex;
+			float2 uv_SandTex;
         };
 		
         // Add instancing support for this shader. You need to check 'Enable Instancing' on materials that use the shader.
@@ -47,7 +50,15 @@
             fixed4 WaterMaskColor = tex2D (_WaterMaskTex, IN.uv_WaterMaskTex);
             fixed4 HeightTexColor = tex2D (_HeightTex, IN.uv_HeightTex);
 			fixed4 GrassTexColor = tex2D(_GrassTex, IN.uv_GrassTex);
-			o.Albedo = (GrassTexColor.rgb * HeightTexColor.rgb * (1-WaterMaskColor.a)) + (WaterColor.rgb * WaterMaskColor.a);
+			fixed4 SandTexColor = tex2D(_SandTex, IN.uv_SandTex);
+
+			if (WaterMaskColor.a == 1) {
+				o.Albedo = WaterColor.rgb;
+			} else {
+				// Heightmap texture is gray scale so one channel (e.g. "red") is enough to estimate the "height"
+					o.Albedo = (GrassTexColor.rgb * HeightTexColor.r + SandTexColor.rgb * (1-HeightTexColor.r) * (1 - WaterMaskColor.a)) + (WaterColor.rgb * WaterMaskColor.a);
+//					o.Albedo = (GrassTexColor.rgb * HeightTexColor.r * (1 - WaterMaskColor.a)) + (WaterColor.rgb * WaterMaskColor.a);
+			}
 			//o.Albedo = (GrassTexColor.rgb * (1-WaterMaskColor.a)) + (WaterColor.rgb * WaterMaskColor.a);
         }
         ENDCG
