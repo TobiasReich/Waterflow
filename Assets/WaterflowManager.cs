@@ -16,13 +16,11 @@ public class WaterflowManager : MonoBehaviour
     private DepthFrameReader _Reader;
     private ushort[] _Data;
     private const float MAX_DEPTH = 8000f; // The maximum value the Kinect may return for distances
-    private const float WATER_HEIGHT_EPSILON = 0.001f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
-    private const float FRESH_WATER_INFLOW = 10000f; // The MAX amount of water added each tick
-    private const float HEIGHT_MAP_MULTIPLYER = 50000f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
+    private const float WATER_HEIGHT_EPSILON = 0.005f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
+    private const float FRESH_WATER_INFLOW = 1000f; // The MAX amount of water added each tick
+    private const float HEIGHT_MAP_MULTIPLYER = 100f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
 
     private Color waterEnabledColor;
-    private Color waterWetColor;
-    private Color waterDisabledColor;
     private Texture2D waterTexture; // Texture that masks where we "stamp" water
     private Texture2D heightTexture; // Texture that paints the height
 
@@ -30,8 +28,8 @@ public class WaterflowManager : MonoBehaviour
     private int depthHeight = 424;
     
     // Values for water texture offset (so it looks more like flowing water)
-    float waterTextureFlowSpeed = 0.002f;
-    Renderer rend;
+    private float waterTextureFlowSpeed = 0.002f;
+    private Material material;
 
     /* Defines where the water comes from */
     private int waterSourceX = 250;
@@ -42,21 +40,17 @@ public class WaterflowManager : MonoBehaviour
 
 
     // A list containing all height values sorted so we can iterate from the heighest to the lowest field
-    List<Tuple<int, int, float>> heightMapOrderedList = new List<Tuple<int, int, float>>();
-    float[,] waterHeight;
-    float[,] terrainHeight;
+    private List<Tuple<int, int, float>> heightMapOrderedList = new List<Tuple<int, int, float>>();
+    private float[,] waterHeight;
+    private float[,] terrainHeight;
 
 
     void Start() {
-        Application.targetFrameRate = 30; // Set the FPS to 30 - this is the max the Kinect can do.
+        Application.targetFrameRate = 60; // Set the FPS to 30 - this is the max the Kinect can do.
 
         Debug.Log("FrameRate: " + Application.targetFrameRate);
 
-        rend = GetComponent<Renderer>();
-
-        waterEnabledColor  = new Color(0f, 0f, 0f, 1f);
-        waterWetColor      = new Color(0f, 0f, 0f, 0.7f);
-        waterDisabledColor = new Color(0f, 0f, 0f, 0f);
+        waterEnabledColor = new Color(1f, 0f, 0f);
 
         waterHeight = new float[depthWidth, depthHeight];
         terrainHeight = new float[depthWidth, depthHeight];
@@ -66,9 +60,11 @@ public class WaterflowManager : MonoBehaviour
         waterTexture = new Texture2D(depthWidth, depthHeight);
         heightTexture = new Texture2D(depthWidth, depthHeight);
 
-        gameObject.GetComponent<Renderer>().material.SetTexture("_WaterMaskTex", waterTexture);
-        gameObject.GetComponent<Renderer>().material.SetTexture("_HeightTex", heightTexture);
-        
+        material = gameObject.GetComponent<Renderer>().material;
+        material.SetTexture("_WaterMaskTex", waterTexture);
+        material.SetTexture("_HeightTex", heightTexture);
+        //material.SetFloat("_height", 1.5f);
+
         frameDesc = _Sensor.DepthFrameSource.FrameDescription;
 
         if (_Sensor != null) {
@@ -224,7 +220,6 @@ public class WaterflowManager : MonoBehaviour
          * The total height difference is 1.5 (0.5 for terrain, 1.0 for water)
          * Thus: result = Min(1.5,1.0) = 1.0 (meaning all water will move) 
          */
-
         // There is only a flow if the total height is higher than the neighbour!
         if (localAbsoluteHeight > otherAbsoluteHeight) {
             // Calculate how much water difference is there actually?
@@ -292,32 +287,28 @@ public class WaterflowManager : MonoBehaviour
     /* This generates a water texture linked to the amount of water in each "(height) pixel" */
     private void GenerateWaterTexture() {
         float offset = Time.time * waterTextureFlowSpeed;
-        rend.material.SetTextureOffset("_WaterTex", new Vector2(offset, 0));
+        material.SetTextureOffset("_WaterTex", new Vector2(offset, 0));
 
         for (int y = 1; y < frameDesc.Height-1; y++) {
             for (int x = 1; x < frameDesc.Width-1; x++) {
                 float waterHeightVal = waterHeight[x, y];
-                if (waterHeightVal > 0) {
+                if (waterHeightVal > 0f) {
                     waterTexture.SetPixel(x, y, waterEnabledColor); // Sets the water texture enabled this pixel
 
-                } else if (waterHeight[x + 1, y] + waterHeight[x - 1, y] + waterHeight[x, y + 1] + waterHeight[x, y - 1] > 0) {
-                    // If any of the sourrouncing fields contains water, paint this with a "wet" color (half color, half water)
-                    // This smoothes the texture so we don't see that many "dry pixels" in a continuum of water
-                    float height = terrainHeight[x, y] / HEIGHT_MAP_MULTIPLYER; // Reduce height to normalized value 0..1f
-                    heightTexture.SetPixel(x, y, new Color(height, height, height));
-                    waterTexture.SetPixel(x, y, waterWetColor); // Disables water texture this pixel
-
                 } else {
-                    // We draw the terrain -> Create the pixels here
+                    float sourroundingWater = waterHeight[x + 1, y] + waterHeight[x - 1, y] + waterHeight[x, y + 1] + waterHeight[x, y - 1] / 4f;
+                    // If any of the sourrouncing fields contains water, paint this "wet"
+                    // This smoothes the texture so we don't see that many "dry pixels" in a "continuum of water"
                     float height = terrainHeight[x, y] / HEIGHT_MAP_MULTIPLYER; // Reduce height to normalized value 0..1f
                     heightTexture.SetPixel(x, y, new Color(height, height, height));
-                    waterTexture.SetPixel(x, y, waterDisabledColor); // Disables water texture this pixel
+                    waterTexture.SetPixel(x, y, new Color(sourroundingWater, 0f, 0f)); // Disables water texture this pixel
                 }
             }
         }
         waterTexture.Apply();
         heightTexture.Apply();
     }
+
 
     void OnApplicationQuit() {
         if (_Reader != null) {
@@ -329,7 +320,6 @@ public class WaterflowManager : MonoBehaviour
             if (_Sensor.IsOpen) {
                 _Sensor.Close();
             }
-
             _Sensor = null;
         }
     }
