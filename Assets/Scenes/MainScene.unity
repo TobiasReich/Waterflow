@@ -504,7 +504,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Hightlight Ground
+  m_Text: Show sea level
 --- !u!222 &560023890
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1498,7 +1498,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 1966741573}
-        m_MethodName: toggleHeightIndicator
+        m_MethodName: toggleSeaLevelIndicator
         m_Mode: 0
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

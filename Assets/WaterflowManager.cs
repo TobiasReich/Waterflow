@@ -17,6 +17,7 @@ public class WaterflowManager : MonoBehaviour
     private ushort[] _Data;
     private const float MAX_DEPTH = 8000f; // The maximum value the Kinect may return for distances
     private const float WATER_HEIGHT_EPSILON = 0.005f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
+    private const float SEA_LEVEL_HEIGHT_EPSILON = 0.01f; // Everything below that height is considered ground water height so water can disappear
     private const float FRESH_WATER_INFLOW = 1000f; // The MAX amount of water added each tick
     private const float HEIGHT_MAP_MULTIPLYER = 100f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
 
@@ -37,7 +38,7 @@ public class WaterflowManager : MonoBehaviour
     private float waterInflowScale = 0.5f; // The amount of water added each tick
     private float minimumHeight = 0.5f; // Translates all height values by this amount
     private float heightScaleFactor = 2f; // Scales all height values by this amount
-    private int showHeightIndicator = 1; // Shows (1) / Hides (0) the ground highlighted
+    private int showSeaLevelIndicator = 1; // Shows (1) / Hides (0) the ground highlighted
 
 
     // A list containing all height values sorted so we can iterate from the heighest to the lowest field
@@ -64,7 +65,7 @@ public class WaterflowManager : MonoBehaviour
         material = gameObject.GetComponent<Renderer>().material;
         material.SetTexture("_WaterMaskTex", waterTexture);
         material.SetTexture("_HeightTex", heightTexture);
-        material.SetInt("_showGround", showHeightIndicator);
+        material.SetInt("_showSeaLevelGround", showSeaLevelIndicator);
 
         frameDesc = _Sensor.DepthFrameSource.FrameDescription;
 
@@ -90,8 +91,7 @@ public class WaterflowManager : MonoBehaviour
     private void AddWater() {
         waterHeight[waterSourceX, waterSourceY] = waterInflowScale * FRESH_WATER_INFLOW;
     }
-
-     
+         
 
     /** Distributes the water depending on the height around it.
     *  
@@ -277,8 +277,14 @@ public class WaterflowManager : MonoBehaviour
     private void TrickleOffWater() {
         for (int y = 0; y < frameDesc.Height; y++) {
             for (int x = 0; x < frameDesc.Width; x++) {
-                // The water height is the maximum of "empty" and the current height - epsilon
-                waterHeight[x, y] = Math.Max(0f, waterHeight[x, y] - WATER_HEIGHT_EPSILON);
+                if (terrainHeight[x, y] < SEA_LEVEL_HEIGHT_EPSILON) {
+                    // Water on the "sea level" ground get 0
+                    // This is important to allow water to leave the area again
+                    waterHeight[x, y] = 0f; // only inside x > 50 && y > 50 && x < 500 && y < 400
+                } else { 
+                    // The water height is the maximum of "empty" and the current height - epsilon
+                    waterHeight[x, y] = Math.Max(0f, waterHeight[x, y] - WATER_HEIGHT_EPSILON);
+                }
             }
         }
     }
@@ -309,7 +315,7 @@ public class WaterflowManager : MonoBehaviour
         waterTexture.Apply();
         heightTexture.Apply();
 
-        material.SetInt("_showGround", showHeightIndicator);
+        material.SetInt("_showSeaLevelGround", showSeaLevelIndicator);
     }
 
 
@@ -368,14 +374,15 @@ public class WaterflowManager : MonoBehaviour
     
     /// <summary>
     /// Sets the ground "Highlight" enabled or disabled
+    /// so its possible to see whether a pixel is already
+    /// at the sea level water height
     /// </summary>
     /// <param name="amount"></param>
-    public void toggleHeightIndicator(bool enabled) {
-        Debug.Log("Showing Height indicator " + enabled);
+    public void toggleSeaLevelIndicator(bool enabled) {
         if (enabled) {
-            showHeightIndicator = 1;
+            showSeaLevelIndicator = 1;
         } else {
-            showHeightIndicator = 0;
+            showSeaLevelIndicator = 0;
         }
     }
 
