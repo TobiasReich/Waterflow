@@ -7,6 +7,7 @@
         _WaterMaskTex ("Water-MASK (RGB)", 2D) = "white" {}
         _GrassTex ("GrassTexture (RGB)", 2D) = "white" {}
 		_SandTex("SandTexture (RGB)", 2D) = "white" {}
+		_HeightCropTex("Height Crop(RGB)", 2D) = "white" {}
     }
     SubShader
     {
@@ -26,7 +27,8 @@
         sampler2D _HeightTex;
         sampler2D _GrassTex;
         sampler2D _SandTex;
-        float _height;
+		sampler2D _HeightCropTex;
+        int _showGround;
 
         struct Input
         {
@@ -35,6 +37,8 @@
 			float2 uv_HeightTex;
 			float2 uv_GrassTex;
 			float2 uv_SandTex;
+			float2 uv_HeightCropTex;
+			int _showGround;
         };
 		
         // Add instancing support for this shader. You need to check 'Enable Instancing' on materials that use the shader.
@@ -51,13 +55,19 @@
 			float height = tex2D(_HeightTex, IN.uv_HeightTex).r;		 // Only one value needed for "height" value
 			fixed4 GrassTexColor = tex2D(_GrassTex, IN.uv_GrassTex);
 			fixed4 SandTexColor = tex2D(_SandTex, IN.uv_SandTex);
-
+			fixed4 HeightCropTex = tex2D(_HeightCropTex, IN.uv_HeightCropTex);
+						
 			if (waterVal == 1) {
 				o.Albedo = WaterColor.rgb;
 			} else {
-				// Calculation: "Grass intensity" = height; "Sand intensity" = 1-height
-				// Both blend with the water alpha value
-				o.Albedo = ((GrassTexColor.rgb * height + SandTexColor.rgb * (1- height)) * (1 - waterVal)) + (WaterColor.rgb * waterVal);
+				if (_showGround == 1 && height == 0) {
+					// When the show ground "mask" is enabled, all height of 0 will be painted with the special texture
+					o.Albedo = HeightCropTex.rgb;
+				} else {
+					// Calculation: "Grass intensity" = height; "Sand intensity" = 1-height
+					// Both blend with the water alpha value
+					o.Albedo = ((GrassTexColor.rgb * height + SandTexColor.rgb * (1 - height)) * (1 - waterVal)) + (WaterColor.rgb * waterVal);
+				}				
 			}
         }
         ENDCG

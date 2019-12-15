@@ -37,6 +37,7 @@ public class WaterflowManager : MonoBehaviour
     private float waterInflowScale = 0.5f; // The amount of water added each tick
     private float minimumHeight = 0.5f; // Translates all height values by this amount
     private float heightScaleFactor = 2f; // Scales all height values by this amount
+    private int showHeightIndicator = 1; // Shows (1) / Hides (0) the ground highlighted
 
 
     // A list containing all height values sorted so we can iterate from the heighest to the lowest field
@@ -63,7 +64,7 @@ public class WaterflowManager : MonoBehaviour
         material = gameObject.GetComponent<Renderer>().material;
         material.SetTexture("_WaterMaskTex", waterTexture);
         material.SetTexture("_HeightTex", heightTexture);
-        //material.SetFloat("_height", 1.5f);
+        material.SetInt("_showGround", showHeightIndicator);
 
         frameDesc = _Sensor.DepthFrameSource.FrameDescription;
 
@@ -307,6 +308,8 @@ public class WaterflowManager : MonoBehaviour
         }
         waterTexture.Apply();
         heightTexture.Apply();
+
+        material.SetInt("_showGround", showHeightIndicator);
     }
 
 
@@ -361,6 +364,19 @@ public class WaterflowManager : MonoBehaviour
     public void setHeightScale(float amount) {
         Debug.Log("Adjusting maximum height to " + amount);
         heightScaleFactor = amount;            
+    } 
+    
+    /// <summary>
+    /// Sets the ground "Highlight" enabled or disabled
+    /// </summary>
+    /// <param name="amount"></param>
+    public void toggleHeightIndicator(bool enabled) {
+        Debug.Log("Showing Height indicator " + enabled);
+        if (enabled) {
+            showHeightIndicator = 1;
+        } else {
+            showHeightIndicator = 0;
+        }
     }
 
 
