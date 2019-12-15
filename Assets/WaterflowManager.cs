@@ -411,7 +411,7 @@ public class WaterflowManager : MonoBehaviour
                 }
             }
             UpdateHeightMap();
-            Thread.Sleep(300);
+            Thread.Sleep(100);
         }
     }
 
