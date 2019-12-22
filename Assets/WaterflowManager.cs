@@ -15,26 +15,27 @@ public class WaterflowManager : MonoBehaviour
 
     private DepthFrameReader _Reader;
     private ushort[] _Data;
-    private const float MAX_DEPTH = 8000f; // The maximum value the Kinect may return for distances
-    private const float WATER_HEIGHT_EPSILON = 0.001f; // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
-    private const float SEA_LEVEL_HEIGHT_EPSILON = 0.01f; // Everything below that height is considered ground water height so water can disappear
-    private const float FRESH_WATER_INFLOW = 1000f; // The MAX amount of water added each tick
-    private const float HEIGHT_MAP_MULTIPLYER = 500f; // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
+    private const float MAX_DEPTH = 8000f;                // The maximum value the Kinect may return for distances
+
+    private const float WATER_HEIGHT_EPSILON = 0.0001f;   // Water heights below this are considered 0 (so we avoid infinitely small water puddles)
+    private const float SEA_LEVEL_HEIGHT_EPSILON = 0.01f; // Everything below that height is considered ground water height so water WILL DISAPPEAR
+    private const float FRESH_WATER_INFLOW = 1000f;       // The MAX amount of water added each tick
+    private const float HEIGHT_MAP_MULTIPLYER = 500f;     // The amount of amplification for the terrain (1.0 means the height of the absolute terrain = the height of 1.0 water)
+
+    private const int DEPTH_WIDTH = 512;                  // X Resolution of the camera
+    private const int DEPTH_HEIGHT = 424;                 // Y Resolution of the camera
 
     private Color waterEnabledColor;
     private Texture2D waterTexture; // Texture that masks where we "stamp" water
     private Texture2D heightTexture; // Texture that paints the height
 
-    private int depthWidth = 512;
-    private int depthHeight = 424;
-    
     // Values for water texture offset (so it looks more like flowing water)
     private float waterTextureFlowSpeed = 0.002f;
     private Material material;
 
     /* Defines where the water comes from */
-    private int waterSourceX = 230;
-    private int waterSourceY = 150;
+    private int waterSourceX = 250;
+    private int waterSourceY = 200;
     private float waterInflowScale = 0.5f; // The amount of water added each tick
     private float minimumHeight = 0.5f; // Translates all height values by this amount
     private float heightScaleFactor = 20f; // Scales all height values by this amount
@@ -54,13 +55,13 @@ public class WaterflowManager : MonoBehaviour
 
         waterEnabledColor = new Color(1f, 0f, 0f);
 
-        waterHeight = new float[depthWidth, depthHeight];
-        terrainHeight = new float[depthWidth, depthHeight];
+        waterHeight = new float[DEPTH_WIDTH, DEPTH_HEIGHT];
+        terrainHeight = new float[DEPTH_WIDTH, DEPTH_HEIGHT];
 
         _Sensor = KinectSensor.GetDefault();
         
-        waterTexture = new Texture2D(depthWidth, depthHeight);
-        heightTexture = new Texture2D(depthWidth, depthHeight);
+        waterTexture = new Texture2D(DEPTH_WIDTH, DEPTH_HEIGHT);
+        heightTexture = new Texture2D(DEPTH_WIDTH, DEPTH_HEIGHT);
 
         material = gameObject.GetComponent<Renderer>().material;
         material.SetTexture("_WaterMaskTex", waterTexture);
@@ -267,7 +268,7 @@ public class WaterflowManager : MonoBehaviour
                 if (terrainHeight[x, y] < SEA_LEVEL_HEIGHT_EPSILON) {
                     // Water on the "sea level" ground get 0
                     // This is important to allow water to leave the area again
-                    waterHeight[x, y] = 0f; // only inside x > 50 && y > 50 && x < 500 && y < 400
+                    waterHeight[x, y] = 0f;
                 } else { 
                     // The water height is the maximum of "empty" and the current height - epsilon
                     waterHeight[x, y] = Math.Max(0f, waterHeight[x, y] - WATER_HEIGHT_EPSILON);
@@ -406,8 +407,8 @@ public class WaterflowManager : MonoBehaviour
     private void UpdateHeightMap() {
         ushort[] depthData = _Data;
         List<FieldValue> tempHeightMapOrderedList = new List<FieldValue>();
-        float[,] tempTerrainHeight = new float[depthWidth, depthHeight];
-        float[,] smoothedTerrainHeight = new float[depthWidth, depthHeight];
+        float[,] tempTerrainHeight = new float[DEPTH_WIDTH, DEPTH_HEIGHT];
+        float[,] smoothedTerrainHeight = new float[DEPTH_WIDTH, DEPTH_HEIGHT];
 
         for (int y = 0; y < frameDesc.Height; y++) {
             for (int x = 0; x < frameDesc.Width; x++) {
