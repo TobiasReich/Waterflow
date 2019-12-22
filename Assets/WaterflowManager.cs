@@ -118,8 +118,8 @@ public class WaterflowManager : MonoBehaviour
                 waterHeight[x, y] = 0f; //waterHeight[x, y] * 0.5f;
 
             } else {
-                // This is the normal case. The water distributes between the neighbour fields
-                // The water amount for this 
+                // This is the normal case. 
+                // Get a list of the sourrounding fields and their water flow capacity
                 List<WaterFlow> capacityList = generateWaterFlowCapacityList(x, y);
 
                 // The first element is the one with the least capacity.
