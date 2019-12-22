@@ -120,7 +120,7 @@ public class WaterflowManager : MonoBehaviour
             } else {
                 // This is the normal case. The water distributes between the neighbour fields
                 // The water amount for this 
-                List<Tuple<int, int, float>> capacityList = generateWaterFlowCapacityList(x, y);
+                List<WaterFlow> capacityList = generateWaterFlowCapacityList(x, y);
 
                 // The first element is the one with the least capacity.
                 // We try to fill this one first (and all sourrounding ones equally)
@@ -133,7 +133,7 @@ public class WaterflowManager : MonoBehaviour
                 // to be flown to.
                 float totalRequestedFlow = 0f;
                 for (int neighbourIndex = 0; neighbourIndex < capacityList.Count; neighbourIndex++) {
-                    totalRequestedFlow += capacityList[neighbourIndex].Item3;
+                    totalRequestedFlow += capacityList[neighbourIndex].flow;
                 }
                 // Now we know how much water "would like" to flow. Divide the potential water by this value.
                 // E.g. we have a total requested flow of 4 but only 1f water in the local field
@@ -149,9 +149,9 @@ public class WaterflowManager : MonoBehaviour
                 // Now distribute the flow 
                 // Iterate over all neighbours and give them their amount of water.
                 for (int neighbourIndex = 0; neighbourIndex < capacityList.Count; neighbourIndex++) {
-                    Tuple<int, int, float> neighbourCapacity = capacityList[neighbourIndex];
-                    waterHeight[neighbourCapacity.Item1, neighbourCapacity.Item2] += neighbourCapacity.Item3 * totalCapacityRatio;
-                    waterHeight[x,y] -= neighbourCapacity.Item3 * totalCapacityRatio;
+                    WaterFlow neighbourCapacity = capacityList[neighbourIndex];
+                    waterHeight[neighbourCapacity.x, neighbourCapacity.y] += neighbourCapacity.flow * totalCapacityRatio;
+                    waterHeight[x,y] -= neighbourCapacity.flow * totalCapacityRatio;
                 }
 
             }
@@ -169,74 +169,65 @@ public class WaterflowManager : MonoBehaviour
     /// </summary>
     /// <param name="x"></param>
     /// <param name="y"></param>
-    private List<Tuple<int, int, float>> generateWaterFlowCapacityList(int x, int y) {
-        List<Tuple<int, int, float>> capacities = new List<Tuple<int, int, float>>();
+    private List<WaterFlow> generateWaterFlowCapacityList(int x, int y) {
+        List<WaterFlow> capacities = new List<WaterFlow>();
 
         // For all 4 sourrounding fields calculate these values and add them if their capacity is > 0
-        Tuple<int, int, float> capacityNorth = generateWaterFlowCapacity(x, y, x, y - 1);
-        if (capacityNorth.Item3 > WATER_HEIGHT_EPSILON) { 
+        WaterFlow capacityNorth = generateWaterFlowCapacity(x, y, x, y - 1);
+        if (capacityNorth.flow > WATER_HEIGHT_EPSILON) { 
             capacities.Add(capacityNorth); 
         }
 
-        Tuple<int, int, float> capacitySouth = generateWaterFlowCapacity(x, y, x, y + 1);
-        if (capacitySouth.Item3 > WATER_HEIGHT_EPSILON) {
+        WaterFlow capacitySouth = generateWaterFlowCapacity(x, y, x, y + 1);
+        if (capacitySouth.flow > WATER_HEIGHT_EPSILON) {
             capacities.Add(capacitySouth); 
         }
 
-        Tuple<int, int, float> capacityEast = generateWaterFlowCapacity(x, y, x + 1, y);
-        if (capacityEast.Item3 > WATER_HEIGHT_EPSILON) { 
+        WaterFlow capacityEast = generateWaterFlowCapacity(x, y, x + 1, y);
+        if (capacityEast.flow > WATER_HEIGHT_EPSILON) { 
             capacities.Add(capacityEast); 
         }
 
-        Tuple<int, int, float> capacityWest = generateWaterFlowCapacity(x, y, x - 1, y);
-        if (capacityWest.Item3 > WATER_HEIGHT_EPSILON) { 
+        WaterFlow capacityWest = generateWaterFlowCapacity(x, y, x - 1, y);
+        if (capacityWest.flow > WATER_HEIGHT_EPSILON) { 
             capacities.Add(capacityWest); 
         }
 
         // We now have a list of all sourrounding fields with flow capacity (can be less than 4!)
         // Sort that list by their capacity so we can fill all fields equally by 
         // their minimum commom capacity
-        capacities.Sort((objectA, objectB) => objectA.Item3.CompareTo(objectB.Item3)); // Sorts in place (ascending)
+        capacities.Sort((objectA, objectB) => objectA.flow.CompareTo(objectB.flow)); // Sorts in place (ascending when A - B)
         return capacities;
     }
 
 
-    private Tuple<int, int, float> generateWaterFlowCapacity(int x, int y, int destX, int destY) {
+    private WaterFlow generateWaterFlowCapacity(int x, int y, int destX, int destY) {
         // Get the absolute water height difference.
-        float localWaterHeight = waterHeight[x, y];
-        float localTerrainHeight = terrainHeight[x, y];
+        float hereWaterHeight = waterHeight[x, y];
+        float hereTerrainHeight = terrainHeight[x, y];
+        float hereAbsoluteHeight = hereTerrainHeight + hereWaterHeight;
 
-        float otherWaterHeight = waterHeight[destX, destY];
-        float otherTerrainHeight = terrainHeight[destX, destY];
+        float thereWaterHeight = waterHeight[destX, destY];
+        float thereTerrainHeight = terrainHeight[destX, destY];
+        float thereAbsoluteHeight = thereTerrainHeight + thereWaterHeight;
 
-        float localAbsoluteHeight = localTerrainHeight + localWaterHeight;
-        float otherAbsoluteHeight = otherTerrainHeight + otherWaterHeight;
 
         float waterFlowDifference = 0f; // Default -> If we don't change there is no water flow
 
-        /* The result now is the Minimum of 
-         * the total height differece or the amount of water available
-         * E.G. [Terrain / Water]
-         *      [0.5/0.0] [1.0/1.0]
-         * The total height difference is 1.5 (0.5 for terrain, 1.0 for water)
-         * Thus: result = Min(1.5,1.0) = 1.0 (meaning all water will move) 
-         */
-        // There is only a flow if the total height is higher than the neighbour!
-        if (localAbsoluteHeight > otherAbsoluteHeight) {
+        // There is only a flow if here the total height is higher than there!
+        if (hereAbsoluteHeight > thereAbsoluteHeight) {
             // Calculate how much water difference is there actually?
             // There are actually only two cases important here.
 
-            if (otherAbsoluteHeight + localWaterHeight > localTerrainHeight) {
-                // 1) The absolute height of the neighbor is so low,
-                // the max amount of water from this field could move (because it is still higher)
-                // The flowDifference will be the local water height (all water)
-                waterFlowDifference = localWaterHeight;
+            if (thereAbsoluteHeight + hereWaterHeight > hereTerrainHeight) {
+                // 1) The absolute height there is so low,
+                // all water from here could move (because it is still higher)
+                // The flowDifference will be all the water height from here
+                waterFlowDifference = hereWaterHeight;
 
             } else {
                 // 2) The absolute heights are similar so ONLY A FRACTION of the water 
-                // will move to the neighbour field (since we checked whether all water 
-                // might flow and we are here instead)
-                // The capacity consists of two values
+                // will move to the neighbour field 
 
                 // A) Terrain-Delta (Dh) - The terrain height difference between local terrain height and absolute neighbor height
                 // This is the amount of "guaranteed water flow" since the water won't flow back if the terrain is higher
@@ -257,11 +248,12 @@ public class WaterflowManager : MonoBehaviour
                 //waterFlowDifference = Dh + halfLeftOverWaterAmount;
 
                 // Simplified solution. difference is ALL WATER POSSIBLE
-                // waterFlowDifference = Math.Min(localWaterHeight, localAbsoluteHeight - otherAbsoluteHeight);
-                waterFlowDifference = localAbsoluteHeight - otherAbsoluteHeight;
+                //waterFlowDifference = Math.Min(hereWaterHeight, hereAbsoluteHeight - thereAbsoluteHeight);
+                waterFlowDifference = hereAbsoluteHeight - thereAbsoluteHeight;
             }
         }
-        return new Tuple<int, int, float>(destX, destY, waterFlowDifference);
+
+        return new WaterFlow(destX, destY, waterFlowDifference);
     }
 
 
@@ -473,4 +465,20 @@ public class WaterflowManager : MonoBehaviour
     }
 
 
+}
+
+
+/// <summary>
+/// The WaterFlow struct containing information about potential waterflow as well as it's coordinates
+/// </summary>
+struct WaterFlow {
+    public int x;
+    public int y;
+    public float flow;
+
+    public WaterFlow(int x, int y, float waterFlow) : this() {
+        this.x = x;
+        this.y = y;
+        this.flow = waterFlow;
+    }
 }
