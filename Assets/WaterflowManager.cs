@@ -33,8 +33,8 @@ public class WaterflowManager : MonoBehaviour
     private Material material;
 
     /* Defines where the water comes from */
-    private int waterSourceX = 130;
-    private int waterSourceY = 100;
+    private int waterSourceX = 230;
+    private int waterSourceY = 150;
     private float waterInflowScale = 0.5f; // The amount of water added each tick
     private float minimumHeight = 0.5f; // Translates all height values by this amount
     private float heightScaleFactor = 20f; // Scales all height values by this amount
@@ -42,7 +42,7 @@ public class WaterflowManager : MonoBehaviour
 
 
     // A list containing all height values sorted so we can iterate from the heighest to the lowest field
-    private List<Tuple<int, int, float>> heightMapOrderedList = new List<Tuple<int, int, float>>();
+    private List<FieldValue> heightMapOrderedList = new List<FieldValue>();
     private float[,] waterHeight;
     private float[,] terrainHeight;
 
@@ -103,9 +103,9 @@ public class WaterflowManager : MonoBehaviour
     *  to the sourrounding fields. **/
     private void DistributeWater() {
         for (int fieldIndex = 0; fieldIndex < heightMapOrderedList.Count; fieldIndex++) {
-            Tuple<int, int, float> field = heightMapOrderedList[fieldIndex];
-            int x = field.Item1;
-            int y = field.Item2;
+            FieldValue field = heightMapOrderedList[fieldIndex];
+            int x = field.x;
+            int y = field.y;
 
             
             if (waterHeight[x, y] <= WATER_HEIGHT_EPSILON) {
@@ -120,7 +120,7 @@ public class WaterflowManager : MonoBehaviour
             } else {
                 // This is the normal case. 
                 // Get a list of the sourrounding fields and their water flow capacity
-                List<WaterFlow> capacityList = generateWaterFlowCapacityList(x, y);
+                List<FieldValue> capacityList = generateWaterFlowCapacityList(x, y);
 
                 // The first element is the one with the least capacity.
                 // We try to fill this one first (and all sourrounding ones equally)
@@ -132,28 +132,23 @@ public class WaterflowManager : MonoBehaviour
                 // But that way we get an estimation where we require the most
                 // to be flown to.
                 float totalRequestedFlow = 0f;
-                for (int neighbourIndex = 0; neighbourIndex < capacityList.Count; neighbourIndex++) {
-                    totalRequestedFlow += capacityList[neighbourIndex].flow;
+                for (int neighbour = 0; neighbour < capacityList.Count; neighbour++) {
+                    totalRequestedFlow += capacityList[neighbour].amount;
                 }
                 // Now we know how much water "would like" to flow. Divide the potential water by this value.
-                // E.g. we have a total requested flow of 4 but only 1f water in the local field
-                // This would lead to a totalCapacityRatio of 1 / 4 = 0.25 
-                // In the next step all desired water would flow multiplied by * 0.25 
+                // E.g. we have a total requested flow of 4 but only 2 water in the local field
+                // This would lead to a totalCapacityRatio of 2 / 4 = 0.5 
+                // In the next step all desired water would flow multiplied by * 0.5
+                // TODO: CHECK IF WE HAVE TO ADD +1 FOR THE LOCAL FIELD so not all is flowing at once
                 float totalCapacityRatio = Math.Min(1f, availableWater / totalRequestedFlow);
-
-                // The minimum amount of water that is desired will be divided by all fields with capacity
-                // That way we spread the water evenly among all neighbours
-                //TODO CHECK IF WE HAVE TO ADD +1 FOR THE LOCAL FIELD
-                //float distributedWaterAmount = distributedCapacity / capacityList.Count;
-                        
-                // Now distribute the flow 
-                // Iterate over all neighbours and give them their amount of water.
-                for (int neighbourIndex = 0; neighbourIndex < capacityList.Count; neighbourIndex++) {
-                    WaterFlow neighbourCapacity = capacityList[neighbourIndex];
-                    waterHeight[neighbourCapacity.x, neighbourCapacity.y] += neighbourCapacity.flow * totalCapacityRatio;
-                    waterHeight[x,y] -= neighbourCapacity.flow * totalCapacityRatio;
+        
+                // Now distribute the flow: give all neighbours a fraction of their desired flow
+                for (int neighbour = 0; neighbour < capacityList.Count; neighbour++) {
+                    FieldValue flow = capacityList[neighbour];
+                    float amount = flow.amount * totalCapacityRatio;
+                    waterHeight[flow.x, flow.y] += amount;
+                    waterHeight[x,y] -= amount;
                 }
-
             }
         }
     }
@@ -169,39 +164,39 @@ public class WaterflowManager : MonoBehaviour
     /// </summary>
     /// <param name="x"></param>
     /// <param name="y"></param>
-    private List<WaterFlow> generateWaterFlowCapacityList(int x, int y) {
-        List<WaterFlow> capacities = new List<WaterFlow>();
+    private List<FieldValue> generateWaterFlowCapacityList(int x, int y) {
+        List<FieldValue> capacities = new List<FieldValue>();
 
         // For all 4 sourrounding fields calculate these values and add them if their capacity is > 0
-        WaterFlow capacityNorth = generateWaterFlowCapacity(x, y, x, y - 1);
-        if (capacityNorth.flow > WATER_HEIGHT_EPSILON) { 
+        FieldValue capacityNorth = generateWaterFlowCapacity(x, y, x, y - 1);
+        if (capacityNorth.amount > WATER_HEIGHT_EPSILON) { 
             capacities.Add(capacityNorth); 
         }
 
-        WaterFlow capacitySouth = generateWaterFlowCapacity(x, y, x, y + 1);
-        if (capacitySouth.flow > WATER_HEIGHT_EPSILON) {
+        FieldValue capacitySouth = generateWaterFlowCapacity(x, y, x, y + 1);
+        if (capacitySouth.amount > WATER_HEIGHT_EPSILON) {
             capacities.Add(capacitySouth); 
         }
 
-        WaterFlow capacityEast = generateWaterFlowCapacity(x, y, x + 1, y);
-        if (capacityEast.flow > WATER_HEIGHT_EPSILON) { 
+        FieldValue capacityEast = generateWaterFlowCapacity(x, y, x + 1, y);
+        if (capacityEast.amount > WATER_HEIGHT_EPSILON) { 
             capacities.Add(capacityEast); 
         }
 
-        WaterFlow capacityWest = generateWaterFlowCapacity(x, y, x - 1, y);
-        if (capacityWest.flow > WATER_HEIGHT_EPSILON) { 
+        FieldValue capacityWest = generateWaterFlowCapacity(x, y, x - 1, y);
+        if (capacityWest.amount > WATER_HEIGHT_EPSILON) { 
             capacities.Add(capacityWest); 
         }
 
         // We now have a list of all sourrounding fields with flow capacity (can be less than 4!)
         // Sort that list by their capacity so we can fill all fields equally by 
         // their minimum commom capacity
-        capacities.Sort((objectA, objectB) => objectA.flow.CompareTo(objectB.flow)); // Sorts in place (ascending when A - B)
+        capacities.Sort((objectA, objectB) => objectA.amount.CompareTo(objectB.amount)); // Sorts in place (ascending when A - B)
         return capacities;
     }
 
 
-    private WaterFlow generateWaterFlowCapacity(int x, int y, int destX, int destY) {
+    private FieldValue generateWaterFlowCapacity(int x, int y, int destX, int destY) {
         // Get the absolute water height difference.
         float hereWaterHeight = waterHeight[x, y];
         float hereTerrainHeight = terrainHeight[x, y];
@@ -253,7 +248,7 @@ public class WaterflowManager : MonoBehaviour
             }
         }
 
-        return new WaterFlow(destX, destY, waterFlowDifference);
+        return new FieldValue(destX, destY, waterFlowDifference);
     }
 
 
@@ -410,7 +405,7 @@ public class WaterflowManager : MonoBehaviour
     /* Iterate over all Fields and update its terrain height */
     private void UpdateHeightMap() {
         ushort[] depthData = _Data;
-        List<Tuple<int, int, float>> tempHeightMapOrderedList = new List<Tuple<int, int, float>>();
+        List<FieldValue> tempHeightMapOrderedList = new List<FieldValue>();
         float[,] tempTerrainHeight = new float[depthWidth, depthHeight];
         float[,] smoothedTerrainHeight = new float[depthWidth, depthHeight];
 
@@ -441,21 +436,21 @@ public class WaterflowManager : MonoBehaviour
         // Blur the height map array. This makes errors less dominant but also avoids pixel errors
         for (int y = 1; y < frameDesc.Height-1; y++) {
             for (int x = 1; x < frameDesc.Width-1; x++) {
-                // Just take the 4 sourrounding fields and calculate the average value
+                // Just take the 4 sourrounding fields and calculate the average value + the local one
                 smoothedTerrainHeight[x, y] =
                     (tempTerrainHeight[x, y] +
                     tempTerrainHeight[x+1, y] +
                     tempTerrainHeight[x-1, y] +
                     tempTerrainHeight[x, y+1] +
                     tempTerrainHeight[x, y-1]) / 5.0f;
-                tempHeightMapOrderedList.Add(new Tuple<int, int, float>(x, y, smoothedTerrainHeight[x, y]));
-                //tempHeightMapOrderedList.Add(new Tuple<int, int, float>(x, y, tempTerrainHeight[x, y]));
+                tempHeightMapOrderedList.Add(new FieldValue(x, y, smoothedTerrainHeight[x, y]));
             }
         }
 
-        // Sort the heightmap in place, descending (that's why ObjectB and ObjectA switched)
-        // The first element is now the highest in the world
-        tempHeightMapOrderedList.Sort((objectA, objectB) => objectA.Item3.CompareTo(objectB.Item3));
+        // Sort the heightmap in place, ascending/descending (ObjectB and ObjectA switched)
+        // The first element is now the lowest in the world
+        // For a list starting with the highest one, call B->A
+        tempHeightMapOrderedList.Sort((objectA, objectB) => objectA.amount.CompareTo(objectB.amount));
 
         // Assign the new (smoothed) height map data 
         // The direct assign to a new array helps avoiding race conditions 
@@ -463,22 +458,22 @@ public class WaterflowManager : MonoBehaviour
         heightMapOrderedList = tempHeightMapOrderedList;
         terrainHeight = smoothedTerrainHeight;
     }
-
-
 }
 
 
 /// <summary>
-/// The WaterFlow struct containing information about potential waterflow as well as it's coordinates
+/// This is a generic value container for a specific point.
+/// Thus it has x and y coordinates and a value.
+/// It's used for Heightmap and WaterFlow containing information about potential waterflow as well as it's coordinates
 /// </summary>
-struct WaterFlow {
+struct FieldValue {
     public int x;
     public int y;
-    public float flow;
+    public float amount;
 
-    public WaterFlow(int x, int y, float waterFlow) : this() {
+    public FieldValue(int x, int y, float waterFlow) : this() {
         this.x = x;
         this.y = y;
-        this.flow = waterFlow;
+        this.amount = waterFlow;
     }
 }
